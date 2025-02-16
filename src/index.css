@@ -160,9 +160,23 @@
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
   }
   
+/* index.css */
 
-/* Navbar stílusok */
-.navbar-container {
+:root {
+    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+    color-scheme: light dark;
+    color: rgba(255, 255, 255, 0.87);
+    background-color: #242424;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Navbar stílusok */
+  .navbar-container {
     width: 60px;
     display: flex;
     justify-content: center;
@@ -183,13 +197,17 @@
     background: rgba(255, 255, 255, 0.1);
   }
   
-  .nav-icon {
+  /*.nav-icon {
     color: white;
     transition: color 0.3s;
-  }
+  }*/
   
   .nav-btn:hover .nav-icon {
     color: #f1c40f;
+  }
+  
+  .active-nav-icon {
+    color: #f1c40f !important;
   }
   
   /* Logout gomb módosítása */

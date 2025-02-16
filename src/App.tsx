@@ -1,11 +1,9 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+
 import './App.css'
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
-import Kepteszt from './components/kepteszt';
+import Esemenyek from './components/esemenyek';
 import SignUp from './components/SignUp';
 
 export default function App() {
@@ -14,8 +12,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/kepteszt" element={<Kepteszt />} />
         <Route path="/SignUp" element={<SignUp />} />
+        <Route path="/esemenyek" element={<Esemenyek />} />
+
       </Routes>
     </Router>
   );
