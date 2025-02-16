@@ -1,5 +1,3 @@
-/* index.css */
-
 :root {
     font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
     line-height: 1.5;
@@ -12,6 +10,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  
   
   /* LoginPage-re háttér, Dashboard-on eltűnik */
   .login-background {
@@ -30,7 +29,7 @@
     align-items: center;
     justify-content: flex-start;
     height: 100vh;
-    padding-left: 15vw;
+    padding-left: 10vw;
   }
   
   .login-card {
@@ -70,4 +69,178 @@
   .login-button:hover {
     background: #444;
   }
+
+  .login-button.disabled {
+    background: #d3d3d3;
+    cursor: not-allowed;
+  }
   
+/* Hibaüzenet stílus */
+.error-message {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ff4d4d;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.2);
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  
+  /* Hibás inputmező */
+  .input-error {
+    border: 2px solid #ff4d4d !important;
+    
+  }
+  
+  /* Hibás email formátum esetén csak a keret legyen piros */
+  .input-error-border {
+    border: 2px solid #ff4d4d !important
+  };
+
+/* index.css */
+
+:root {
+    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+    color-scheme: light dark;
+    color: rgba(255, 255, 255, 0.87);
+    background-color: #242424;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Modern görgetősáv dizájn a táblázatokban */
+  .custom-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: #d3d3d3 #ffffff; /* Görgető - háttér */
+  }
+  
+  .custom-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .custom-scroll::-webkit-scrollbar-track {
+    background: #ffffff; /* Fehér háttér */
+    border-radius: 3px;
+  }
+  
+  .custom-scroll::-webkit-scrollbar-thumb {
+    background: #d3d3d3; /* Világos szürke görgető */
+    border-radius: 10px;
+    transition: background 0.3s;
+  }
+  
+  .custom-scroll::-webkit-scrollbar-thumb:hover {
+    background: #b0b0b0;
+  }
+  
+  /* Statisztikai kártyák modern dizájn */
+  .stat-card {
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+
+/* Navbar stílusok */
+.navbar-container {
+    width: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .nav-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    transition: background 0.3s;
+  }
+  
+  .nav-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .nav-icon {
+    color: white;
+    transition: color 0.3s;
+  }
+  
+  .nav-btn:hover .nav-icon {
+    color: #f1c40f;
+  }
+  
+  /* Logout gomb módosítása */
+  .logout-btn {
+    background: transparent;
+    transition: background 0.3s;
+  }
+  
+  .logout-btn:hover {
+    background: red;
+  }
+  
+  .logout-icon {
+    color: white;
+    transition: color 0.3s;
+  }
+  
+  .logout-btn:hover .logout-icon {
+    color: white;
+  }
+  
+
+  /* Táblázat és chip dizájn */
+.table th {
+  background-color: #f8f9fa;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px;
+  text-align: left;
+}
+
+.table td {
+  padding: 10px;
+  vertical-align: middle;
+}
+
+.chip {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: white;
+  text-align: center;
+}
+
+.chip-green {
+  background-color: #28a745;
+}
+
+.chip-blue {
+  background-color: #007bff;
+}
