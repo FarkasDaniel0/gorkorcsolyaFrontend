@@ -1,4 +1,3 @@
-// Dashboard.tsx
 import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { RiDashboard3Fill } from "react-icons/ri";
@@ -32,10 +31,10 @@ export default function Dashboard() {
      
          {/* Responsive Navbar */}
       <div className="d-flex flex-column bg-dark text-white p-2 position-fixed top-0 start-0 h-100 align-items-center navbar-container">
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/dashboard")}>
+        <button className="btn btn-dark mb-3 nav-btn active-nav-icon" onClick={() => navigate("/dashboard")}>
           <RiDashboard3Fill size={24} className="nav-icon" />
         </button>
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/esemenyek")}>
+        <button className="btn btn-dark mb-3 nav-btn "  onClick={() => navigate("/esemenyek")}>
           <FaCalendarAlt size={24} className="nav-icon" />
         </button>
         <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/berlesek")}>
