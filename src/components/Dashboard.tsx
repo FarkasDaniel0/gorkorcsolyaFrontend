@@ -37,7 +37,7 @@ export default function Dashboard() {
         <button className="btn btn-dark mb-3 nav-btn "  onClick={() => navigate("/esemenyek")}>
           <FaCalendarAlt size={24} className="nav-icon" />
         </button>
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/berlesek")}>
+        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/foglalas")}>
           <FaCartPlus size={24} className="nav-icon" />
         </button>
         <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/profil")}>
