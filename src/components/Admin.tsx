@@ -8,21 +8,48 @@ import { FaPencil } from "react-icons/fa6";
 import { FaTrash } from "react-icons/fa";
 import { IoIosLogOut } from "react-icons/io";
 import { AiOutlinePlus } from "react-icons/ai";
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Form, Button, Table, Modal } from "react-bootstrap";
 
 export default function Admin() {
   const navigate = useNavigate();
 
   // Egyszerű email validáció
-  const validateEmail = (email) => {
+
+  interface Event {
+    id: number;
+    name: string;
+    date: string;
+    description: string;
+  }
+
+  interface Rental {
+    id: number;
+    item: string;
+    date: string;
+  }
+
+  interface User {
+    id: number;
+    Name: string;
+    Email: string;
+    Role: number;
+    Password?: string;
+  }
+
+  interface SortConfig {
+    key: string | null;
+    direction: "asc" | "desc" | "default";
+  }
+
+  const validateEmail = (email: string): boolean => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return re.test(email);
   };
 
   // Validáció: Minden esetben kötelező a név, a helyes formátumú email és a jelszó.
   const [userForm, setUserForm] = useState({ username: "", email: "", role: 0, password: "" });
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const isUserFormValid = () => {
     if (userForm.username.trim() === "") return false;
     if (!validateEmail(userForm.email)) return false;
@@ -46,20 +73,20 @@ export default function Admin() {
   ]);
 
   // Felhasználók API adatai – alapból üres tömb
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
 
   // Kereső mező állapota (név és email alapján)
   const [searchTerm, setSearchTerm] = useState("");
 
   // sortConfig a felhasználók táblázat rendezéséhez (ID, Név, Email, Szerep)
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "default" });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: "default" });
   const sortedUsers = useMemo(() => {
     if (!sortConfig.key || sortConfig.direction === "default") {
       return users;
     }
     const sorted = [...users];
-    sorted.sort((a, b) => {
-      let aVal, bVal;
+    sorted.sort((a: User, b: User) => {
+      let aVal: string | number = "", bVal: string | number = "";
       if (sortConfig.key === "id") {
         aVal = a.id;
         bVal = b.id;
@@ -83,15 +110,15 @@ export default function Admin() {
   // Szűrt felhasználók lista a keresőmező alapján (csak név és email)
   const filteredUsers = useMemo(() => {
     if (searchTerm.trim() === "") return sortedUsers;
-    return sortedUsers.filter(u =>
+    return sortedUsers.filter((u: User) =>
       u.Name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.Email.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [sortedUsers, searchTerm]);
 
   // Függvény a rendezéshez
-  const requestSort = (key) => {
-    let direction = "asc";
+  const requestSort = (key: string): void => {
+    let direction: "asc" | "desc" | "default" = "asc";
     if (sortConfig.key === key) {
       if (sortConfig.direction === "asc") {
         direction = "desc";
@@ -106,7 +133,7 @@ export default function Admin() {
   // Események (Events) modális állapotok
   // ---------------------------
   const [showEventModal, setShowEventModal] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [eventForm, setEventForm] = useState({ name: "", date: "", description: "" });
   const handleSaveEvent = () => {
     if (editingEvent) {
@@ -119,12 +146,13 @@ export default function Admin() {
     setEditingEvent(null);
     setEventForm({ name: "", date: "", description: "" });
   };
-  const handleEditEvent = (ev) => {
+  const handleEditEvent = (ev: Event) => {
     setEditingEvent(ev);
     setEventForm({ name: ev.name, date: ev.date, description: ev.description });
     setShowEventModal(true);
   };
-  const handleDeleteEvent = (ev) => {
+
+  const handleDeleteEvent = (ev: Event): void => {
     setDeleteItemType("event");
     setDeleteItem(ev);
     setShowDeleteConfirmModal(true);
@@ -133,26 +161,24 @@ export default function Admin() {
   // ---------------------------
   // Bérlések (Rentals) modális állapotok
   // ---------------------------
+  const handleDeleteRental = (rental: Rental): void => {
+    setDeleteItemType("rental");
+    setDeleteItem(rental);
+    setShowDeleteConfirmModal(true);
+  };
   const [showRentalModal, setShowRentalModal] = useState(false);
-  const [editingRental, setEditingRental] = useState(null);
+  const [editingRental, setEditingRental] = useState<Rental | null>(null);
   const [rentalForm, setRentalForm] = useState({ item: "", date: "" });
   const handleSaveRental = () => {
     if (editingRental) {
       setRentals(rentals.map(r => r.id === editingRental.id ? { ...r, ...rentalForm } : r));
+    } else {
+      const newId = rentals.length ? Math.max(...rentals.map(r => r.id)) + 1 : 1;
+      setRentals([...rentals, { id: newId, ...rentalForm }]);
     }
     setShowRentalModal(false);
     setEditingRental(null);
     setRentalForm({ item: "", date: "" });
-  };
-  const handleEditRental = (r) => {
-    setEditingRental(r);
-    setRentalForm({ item: r.item, date: r.date });
-    setShowRentalModal(true);
-  };
-  const handleDeleteRental = (r) => {
-    setDeleteItemType("rental");
-    setDeleteItem(r);
-    setShowDeleteConfirmModal(true);
   };
 
   // ---------------------------
@@ -164,14 +190,13 @@ export default function Admin() {
   const [showUserModal, setShowUserModal] = useState(false);
   const handleSaveUser = () => {
     if (editingUser) {
-      const updatedUser = { 
+      const updatedUser: User = { 
+        id: editingUser.id,
         Name: userForm.username, 
         Email: userForm.email, 
-        Role: userForm.role 
+        Role: userForm.role,
+        Password: userForm.password.trim() !== "" ? userForm.password : undefined
       };
-      if (userForm.password.trim() !== "") {
-        updatedUser.Password = userForm.password;
-      }
       fetch(`https://api-generator.retool.com/NnWL2O/felhasznalok/${editingUser.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -206,7 +231,7 @@ export default function Admin() {
         .catch(error => console.error("Hiba a felhasználó hozzáadásakor:", error));
     }
   };
-  const handleEditUser = (u) => {
+  const handleEditUser = (u: User) => {
     setEditingUser(u);
     fetch(`https://api-generator.retool.com/NnWL2O/felhasznalok/${u.id}`)
       .then(response => response.json())
@@ -221,7 +246,7 @@ export default function Admin() {
       })
       .catch(error => console.error("Hiba a felhasználó adatok lekérésénél:", error));
   };
-  const handleDeleteUser = (u) => {
+  const handleDeleteUser = (u: User) => {
     setDeleteItemType("user");
     setDeleteItem(u);
     setShowDeleteConfirmModal(true);
@@ -232,7 +257,7 @@ export default function Admin() {
   // ---------------------------
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [deleteItemType, setDeleteItemType] = useState(""); // "event", "rental", "user"
-  const [deleteItem, setDeleteItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState<Event | Rental | User | null>(null);
 
   // ---------------------------
   // Felhasználók API hívása, ha az aktív nézet "users"
@@ -268,11 +293,11 @@ export default function Admin() {
         <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/foglalas")}>
           <FaCartPlus size={24} className="nav-icon" />
         </button>
-        <button className="btn btn-dark mb-3 nav-btn active-nav-icon" onClick={() => navigate("/profil")}>
+        <button className="btn btn-dark mb-3 nav-btn " onClick={() => navigate("/profil")}>
           <FaUserAlt size={24} className="nav-icon" />
         </button>
         <div className="mt-auto mb-3">
-          <button className="btn btn-dark nav-btn" onClick={() => navigate("/beallitasok")}>
+          <button className="btn btn-dark nav-btn active-nav-icon" onClick={() => navigate("/beallitasok")}>
             <FaPencil size={24} className="nav-icon" />
           </button>
         </div>
@@ -339,7 +364,12 @@ export default function Admin() {
 
         {activeView === "rentals" && (
           <div>
-            <h2>Bérlések</h2>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h2>Bérlések</h2>
+              <Button variant="success" onClick={() => { setEditingRental(null); setRentalForm({ item: "", date: "" }); setShowRentalModal(true); }}>
+                <AiOutlinePlus size={20} />
+              </Button>
+            </div>
             <div className="table-responsive" style={{ height: "calc(100vh - 150px)", overflowY: "auto" }}>
               <Table striped bordered hover>
                 <thead>
@@ -347,6 +377,7 @@ export default function Admin() {
                     <th>ID</th>
                     <th>Item</th>
                     <th>Dátum</th>
+                    <th>Műveletek</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,6 +386,14 @@ export default function Admin() {
                       <td>{rental.id}</td>
                       <td>{rental.item}</td>
                       <td>{rental.date}</td>
+                      <td>
+                        <Button variant="danger" size="sm" onClick={() => handleDeleteRental(rental)}>
+                          <FaPencil size={16} />
+                        </Button>
+                        <Button variant="danger" size="sm" onClick={() => handleDeleteRental(rental)}>
+                          <FaTrash size={16} />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -464,6 +503,41 @@ export default function Admin() {
           <Button variant="secondary" onClick={() => setShowEventModal(false)}>Mégse</Button>
           <Button variant="primary" onClick={handleSaveEvent}>Mentés</Button>
         </Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowEventModal(false)}>Mégse</Button>
+          <Button variant="primary" onClick={handleSaveEvent}>Mentés</Button>
+      {/* Bérlés Modal */}
+      <Modal show={showRentalModal} onHide={() => setShowRentalModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{editingRental ? "Bérlés szerkesztése" : "Új bérlés hozzáadása"}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group controlId="formRentalItem">
+              <Form.Label>Item</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="Add meg a bérlés tárgyát"
+                value={rentalForm.item}
+                onChange={(e) => setRentalForm({ ...rentalForm, item: e.target.value })}
+              />
+            </Form.Group>
+            <Form.Group controlId="formRentalDate" className="mt-2">
+              <Form.Label>Dátum</Form.Label>
+              <Form.Control
+                type="date"
+                value={rentalForm.date}
+                onChange={(e) => setRentalForm({ ...rentalForm, date: e.target.value })}
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowRentalModal(false)}>Mégse</Button>
+          <Button variant="primary" onClick={handleSaveRental}>Mentés</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Felhasználó Modal */}
       </Modal>
 
       {/* Felhasználó Modal */}
@@ -530,24 +604,24 @@ export default function Admin() {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>Mégse</Button>
-          <Button variant="danger" onClick={() => {
-            if (deleteItemType === "event") {
-              setEvents(events.filter(e => e.id !== deleteItem.id));
-            } else if (deleteItemType === "rental") {
-              setRentals(rentals.filter(r => r.id !== deleteItem.id));
-            } else if (deleteItemType === "user") {
-              fetch(`https://api-generator.retool.com/NnWL2O/felhasznalok/${deleteItem.id}`, { method: "DELETE" })
-                .then(response => {
-                  if (response.ok) {
-                    setUsers(users.filter(u => u.id !== deleteItem.id));
-                  } else {
-                    console.error("Hiba a felhasználó törlésekor");
-                  }
-                })
-                .catch(error => console.error("Hiba a felhasználó törlésekor:", error));
-            }
-            setShowDeleteConfirmModal(false);
-          }}>Igen</Button>
+            <Button variant="danger" onClick={() => {
+              if (deleteItemType === "event" && deleteItem) {
+                setEvents(events.filter(e => e.id !== deleteItem.id));
+              } else if (deleteItemType === "rental" && deleteItem) {
+                setRentals(rentals.filter(r => r.id !== deleteItem.id));
+              } else if (deleteItemType === "user" && deleteItem) {
+                fetch(`https://api-generator.retool.com/NnWL2O/felhasznalok/${deleteItem.id}`, { method: "DELETE" })
+                  .then(response => {
+                    if (response.ok) {
+                      setUsers(users.filter(u => u.id !== deleteItem.id));
+                    } else {
+                      console.error("Hiba a felhasználó törlésekor");
+                    }
+                  })
+                  .catch(error => console.error("Hiba a felhasználó törlésekor:", error));
+              }
+              setShowDeleteConfirmModal(false);
+            }}>Igen</Button>
         </Modal.Footer>
       </Modal>
     </div>

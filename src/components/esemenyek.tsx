@@ -6,7 +6,7 @@ import { FaCartPlus } from "react-icons/fa";
 import { FaUserAlt } from "react-icons/fa";
 import { FaPencil } from "react-icons/fa6";
 import { IoIosLogOut } from "react-icons/io";
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { FaPencilAlt, FaTrash, FaPlus } from "react-icons/fa";
 import { Modal, Button, Form } from "react-bootstrap";
 
@@ -37,7 +37,6 @@ const valaszthatoEsemenyek: Omit<Event, "berles">[] = [
 ];
 
 export default function Esemenyek() {
-  const username = localStorage.getItem("user") || "Felhasználó";
   const navigate = useNavigate();
 
   // Alapértelmezett adat: 4 sor a táblázatban

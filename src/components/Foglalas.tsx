@@ -6,8 +6,7 @@ import { FaCartPlus } from "react-icons/fa";
 import { FaUserAlt } from "react-icons/fa";
 import { FaPencil } from "react-icons/fa6";
 import { IoIosLogOut } from "react-icons/io";
-import React, { useState, useMemo } from "react";
-import { FaPencilAlt, FaTrash, FaPlus } from "react-icons/fa";
+import { useState, useMemo } from "react";
 import { Modal, Button, Form } from "react-bootstrap";
 
 interface Event {
@@ -15,6 +14,15 @@ interface Event {
   esemény: string;
   dátum: string;
   berles?: boolean; 
+}
+
+interface CardEvent {
+  id: number;
+  title: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  ticketPrice: string;
 }
 
 type SortDirection = "asc" | "desc" | "default";
@@ -37,7 +45,6 @@ const valaszthatoEsemenyek: Omit<Event, "berles">[] = [
 ];
 
 export default function Esemenyek() {
-  const username = localStorage.getItem("user") || "Felhasználó";
   const navigate = useNavigate();
 
   // Alapértelmezett adat: 4 sor a táblázatban
@@ -47,9 +54,9 @@ export default function Esemenyek() {
   // (hogy ne ütközzön a meglévő 1-4-es ID-kal, kezdhetjük pl. 5-tel)
   const [nextUniqueId, setNextUniqueId] = useState<number>(5);
 
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
 
   // Az éppen szerkesztett/törlendő esemény
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -71,47 +78,8 @@ export default function Esemenyek() {
     navigate("/");
   };
 
-  const handleSort = (key: string) => {
-    if (sortConfig.key !== key) {
-      // Ha más oszlopra kattintunk, először növekvő sorrend
-      setSortConfig({ key, direction: "asc" });
-    } else {
-      // Ugyanarra kattintva: asc -> desc -> default
-      if (sortConfig.direction === "asc") {
-        setSortConfig({ key, direction: "desc" });
-      } else if (sortConfig.direction === "desc") {
-        setSortConfig({ key: "", direction: "default" });
-      } else {
-        setSortConfig({ key, direction: "asc" });
-      }
-    }
-  };
 
   // A rendezett adatok kiszámolása a sortConfig alapján
-  const sortedData = useMemo(() => {
-    let sortableItems = [...data];
-    if (sortConfig.key && sortConfig.direction !== "default") {
-      sortableItems.sort((a, b) => {
-        const aVal = a[sortConfig.key as keyof Event];
-        const bVal = b[sortConfig.key as keyof Event];
-
-        // Számok rendezése
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          return aVal - bVal;
-        }
-        // Boolean rendezés
-        if (typeof aVal === "boolean" && typeof bVal === "boolean") {
-          return aVal === bVal ? 0 : aVal ? 1 : -1;
-        }
-        // Egyébként stringként rendezünk (pl. esemény neve, dátum)
-        return (aVal as string).localeCompare(bVal as string);
-      });
-      if (sortConfig.direction === "desc") {
-        sortableItems.reverse();
-      }
-    }
-    return sortableItems;
-  }, [data, sortConfig]);
 
   // Szerkesztés
   const handleEdit = (event: Event) => {
@@ -140,11 +108,9 @@ export default function Esemenyek() {
   const confirmDelete = () => {
     if (selectedEvent) {
       setData(data.filter((item) => item.id !== selectedEvent.id));
-      setShowDeleteModal(false);
       setSelectedEvent(null);
     }
   };
-
   // Új esemény hozzáadása
   const handleAddEvent = () => {
     setShowAddModal(true);
@@ -176,7 +142,7 @@ export default function Esemenyek() {
 
   // Új állapotok a korcsolya bérléshez
 const [showRentalModal, setShowRentalModal] = useState(false);
-const [selectedRentalEvent, setSelectedRentalEvent] = useState(null);
+const [selectedRentalEvent, setSelectedRentalEvent] = useState<CardEvent | null>(null);
 const [rentalRequested, setRentalRequested] = useState(false);
 
 // Új state változók a modal kezeléséhez
