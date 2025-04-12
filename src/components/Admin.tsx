@@ -4,29 +4,32 @@ import { RiDashboard3Fill } from "react-icons/ri";
 import { FaCalendarAlt } from "react-icons/fa";
 import { FaCartPlus } from "react-icons/fa";
 import { FaUserAlt } from "react-icons/fa";
-import { FaPencil } from "react-icons/fa6";
-import { FaTrash } from "react-icons/fa";
+import { FaPencil, FaTrash } from "react-icons/fa6";
 import { IoIosLogOut } from "react-icons/io";
 import { AiOutlinePlus } from "react-icons/ai";
-import { useState, useEffect, useMemo } from "react";
-import { Form, Button, Table, Modal } from "react-bootstrap";
+import { useState, useEffect } from "react";
+import { Button, Table, ButtonGroup, ToggleButton, Modal, Form, Alert } from "react-bootstrap";
+import axios from "axios";
 
 export default function Admin() {
   const navigate = useNavigate();
 
-  // Egyszerű email validáció
-
   interface Event {
     id: number;
+    startDate: string;
+    endDate: string;
     name: string;
-    date: string;
-    description: string;
+    availablePLaces: number;
+    accommodation: number;
+    reserved: number;
   }
 
   interface Rental {
     id: number;
-    item: string;
-    date: string;
+    userID: number;
+    eventID: number;
+    feetSize: number;
+    skateID: number;
   }
 
   interface User {
@@ -34,596 +37,367 @@ export default function Admin() {
     Name: string;
     Email: string;
     Role: number;
-    Password?: string;
   }
 
-  interface SortConfig {
-    key: string | null;
-    direction: "asc" | "desc" | "default";
-  }
-
-  const validateEmail = (email: string): boolean => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-  };
-
-  // Validáció: Minden esetben kötelező a név, a helyes formátumú email és a jelszó.
-  const [userForm, setUserForm] = useState({ username: "", email: "", role: 0, password: "" });
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const isUserFormValid = () => {
-    if (userForm.username.trim() === "") return false;
-    if (!validateEmail(userForm.email)) return false;
-    if (userForm.password.trim() === "") return false;
-    return true;
-  };
-
-  // Aktív nézet: "events", "rentals", vagy "users"
-  const [activeView, setActiveView] = useState("events");
-
-  // Dummy adatok az események és bérlések részére
-  const [events, setEvents] = useState([
-    { id: 1, name: "Görkori verseny", date: "2024-04-01", description: "Izgalmas verseny az új szezonban." },
-    { id: 2, name: "Éjszakai túra", date: "2024-05-10", description: "Fedezd fel a város éjszakai arcát!" },
-    { id: 3, name: "Hétvégi verseny", date: "2024-06-15", description: "Csatlakozz a hétvégi kihíváshoz!" }
-  ]);
-
-  const [rentals, setRentals] = useState([
-    { id: 1, item: "Korcsolya Bérlés 1", date: "2024-04-15" },
-    { id: 2, item: "Korcsolya Bérlés 2", date: "2024-05-20" }
-  ]);
-
-  // Felhasználók API adatai – alapból üres tömb
+  const [events, setEvents] = useState<Event[]>([]);
+  const [rentals, setRentals] = useState<Rental[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [view, setView] = useState("events");
 
-  // Kereső mező állapota (név és email alapján)
-  const [searchTerm, setSearchTerm] = useState("");
+  const [editRental, setEditRental] = useState<Rental | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editError, setEditError] = useState("");
 
-  // sortConfig a felhasználók táblázat rendezéséhez (ID, Név, Email, Szerep)
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: "default" });
-  const sortedUsers = useMemo(() => {
-    if (!sortConfig.key || sortConfig.direction === "default") {
-      return users;
-    }
-    const sorted = [...users];
-    sorted.sort((a: User, b: User) => {
-      let aVal: string | number = "", bVal: string | number = "";
-      if (sortConfig.key === "id") {
-        aVal = a.id;
-        bVal = b.id;
-      } else if (sortConfig.key === "Name") {
-        aVal = a.Name.toLowerCase();
-        bVal = b.Name.toLowerCase();
-      } else if (sortConfig.key === "Email") {
-        aVal = a.Email.toLowerCase();
-        bVal = b.Email.toLowerCase();
-      } else if (sortConfig.key === "Role") {
-        aVal = a.Role;
-        bVal = b.Role;
-      }
-      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
-    });
-    return sorted;
-  }, [users, sortConfig]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [rentalToDelete, setRentalToDelete] = useState<Rental | null>(null);
 
-  // Szűrt felhasználók lista a keresőmező alapján (csak név és email)
-  const filteredUsers = useMemo(() => {
-    if (searchTerm.trim() === "") return sortedUsers;
-    return sortedUsers.filter((u: User) =>
-      u.Name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.Email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [sortedUsers, searchTerm]);
+  const [showDeleteEventModal, setShowDeleteEventModal] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
 
-  // Függvény a rendezéshez
-  const requestSort = (key: string): void => {
-    let direction: "asc" | "desc" | "default" = "asc";
-    if (sortConfig.key === key) {
-      if (sortConfig.direction === "asc") {
-        direction = "desc";
-      } else if (sortConfig.direction === "desc") {
-        direction = "default";
-      }
-    }
-    setSortConfig({ key, direction });
-  };
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    startDate: "",
+    endDate: "",
+    name: "",
+    availablePlaces: 0,
+    accommodation: 0,
+    reserved: 0
+  });
 
-  // ---------------------------
-  // Események (Events) modális állapotok
-  // ---------------------------
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  const [eventForm, setEventForm] = useState({ name: "", date: "", description: "" });
-  const handleSaveEvent = () => {
-    if (editingEvent) {
-      setEvents(events.map(e => e.id === editingEvent.id ? { ...e, ...eventForm } : e));
-    } else {
-      const newId = events.length ? Math.max(...events.map(e => e.id)) + 1 : 1;
-      setEvents([...events, { id: newId, ...eventForm }]);
-    }
-    setShowEventModal(false);
-    setEditingEvent(null);
-    setEventForm({ name: "", date: "", description: "" });
-  };
-  const handleEditEvent = (ev: Event) => {
-    setEditingEvent(ev);
-    setEventForm({ name: ev.name, date: ev.date, description: ev.description });
-    setShowEventModal(true);
-  };
-
-  const handleDeleteEvent = (ev: Event): void => {
-    setDeleteItemType("event");
-    setDeleteItem(ev);
-    setShowDeleteConfirmModal(true);
-  };
-
-  // ---------------------------
-  // Bérlések (Rentals) modális állapotok
-  // ---------------------------
-  const handleDeleteRental = (rental: Rental): void => {
-    setDeleteItemType("rental");
-    setDeleteItem(rental);
-    setShowDeleteConfirmModal(true);
-  };
-  const [showRentalModal, setShowRentalModal] = useState(false);
-  const [editingRental, setEditingRental] = useState<Rental | null>(null);
-  const [rentalForm, setRentalForm] = useState({ item: "", date: "" });
-  const handleSaveRental = () => {
-    if (editingRental) {
-      setRentals(rentals.map(r => r.id === editingRental.id ? { ...r, ...rentalForm } : r));
-    } else {
-      const newId = rentals.length ? Math.max(...rentals.map(r => r.id)) + 1 : 1;
-      setRentals([...rentals, { id: newId, ...rentalForm }]);
-    }
-    setShowRentalModal(false);
-    setEditingRental(null);
-    setRentalForm({ item: "", date: "" });
-  };
-
-  // ---------------------------
-  // Felhasználók (Users) modális állapotok
-  // ---------------------------
-  // A userForm tartalmazza a jelszót is.
-  // Szerkesztéskor az API-ból lekéri a felhasználó teljes adatait,
-  // majd a modalban a jelszó mező betöltődik, de ezután a jelszó mezőnek nem lehet üres a mentéshez.
-  const [showUserModal, setShowUserModal] = useState(false);
-  const handleSaveUser = () => {
-    if (editingUser) {
-      const updatedUser: User = { 
-        id: editingUser.id,
-        Name: userForm.username, 
-        Email: userForm.email, 
-        Role: userForm.role,
-        Password: userForm.password.trim() !== "" ? userForm.password : undefined
-      };
-      fetch(`https://api-generator.retool.com/NnWL2O/felhasznalok/${editingUser.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedUser)
-      })
-        .then(response => response.json())
-        .then(data => {
-          setUsers(users.map(u => u.id === editingUser.id ? data : u));
-          setShowUserModal(false);
-          setEditingUser(null);
-          setUserForm({ username: "", email: "", role: 0, password: "" });
-        })
-        .catch(error => console.error("Hiba a felhasználó módosításakor:", error));
-    } else {
-      const newUser = { 
-        Name: userForm.username, 
-        Email: userForm.email, 
-        Role: userForm.role,
-        Password: userForm.password 
-      };
-      fetch("https://api-generator.retool.com/NnWL2O/felhasznalok", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newUser)
-      })
-        .then(response => response.json())
-        .then(data => {
-          setUsers([...users, data]);
-          setShowUserModal(false);
-          setUserForm({ username: "", email: "", role: 0, password: "" });
-        })
-        .catch(error => console.error("Hiba a felhasználó hozzáadásakor:", error));
-    }
-  };
-  const handleEditUser = (u: User) => {
-    setEditingUser(u);
-    fetch(`https://api-generator.retool.com/NnWL2O/felhasznalok/${u.id}`)
-      .then(response => response.json())
-      .then(data => {
-        setUserForm({ 
-          username: data.Name, 
-          email: data.Email, 
-          role: data.Role, 
-          password: data.Password || "" 
-        });
-        setShowUserModal(true);
-      })
-      .catch(error => console.error("Hiba a felhasználó adatok lekérésénél:", error));
-  };
-  const handleDeleteUser = (u: User) => {
-    setDeleteItemType("user");
-    setDeleteItem(u);
-    setShowDeleteConfirmModal(true);
-  };
-
-  // ---------------------------
-  // Törlés megerősítő modal állapotai
-  // ---------------------------
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
-  const [deleteItemType, setDeleteItemType] = useState(""); // "event", "rental", "user"
-  const [deleteItem, setDeleteItem] = useState<Event | Rental | User | null>(null);
-
-  // ---------------------------
-  // Felhasználók API hívása, ha az aktív nézet "users"
-  // ---------------------------
   useEffect(() => {
-    if (activeView === "users") {
-      fetch("https://api-generator.retool.com/NnWL2O/felhasznalok")
-        .then(response => response.json())
-        .then(data => setUsers(data))
-        .catch(error => console.error("Hiba az API hívás során:", error));
-    }
-  }, [activeView]);
+    axios.get("http://localhost:3000/events")
+      .then(res => setEvents(res.data))
+      .catch(err => console.error("Nem sikerült betölteni az eseményeket:", err));
 
-  // ---------------------------
-  // Kijelentkezés
-  // ---------------------------
+    axios.get("http://localhost:3000/rents")
+      .then(res => setRentals(res.data))
+      .catch(err => console.error("Nem sikerült betölteni a bérléseket:", err));
+
+    axios.get("http://localhost:3000/currentUser")
+      .then(res => setUsers(res.data))
+      .catch(err => console.error("Nem sikerült betölteni a felhasználókat:", err));
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("userEmail");
+    localStorage.removeItem("userId");
     navigate("/");
+  };
+
+  const handleEditRental = (rental: Rental) => {
+    axios.get(`http://localhost:3000/rents/${rental.id}`)
+      .then(res => {
+        setEditRental(res.data);
+        setShowEditModal(true);
+        setEditError("");
+      })
+      .catch(err => {
+        setEditError("Nem sikerült betölteni a bérlés adatait.");
+        console.error(err);
+      });
+  };
+
+  const handleSaveRental = () => {
+    if (!editRental) return;
+    axios.put(`http://localhost:3000/rents/${editRental.id}`, editRental)
+      .then(() => {
+        setRentals(prev => prev.map(r => r.id === editRental.id ? editRental : r));
+        setShowEditModal(false);
+      })
+      .catch(err => {
+        const msg = typeof err.response?.data === 'string' ? err.response.data : "Hiba a módosítás során.";
+        setEditError(msg);
+      });
+  };
+
+  const handleDeleteRental = (rental: Rental) => {
+    setRentalToDelete(rental);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteRental = () => {
+    if (!rentalToDelete) return;
+    axios.delete(`http://localhost:3000/rents/${rentalToDelete.id}`)
+      .then(() => {
+        setRentals(rentals.filter(r => r.id !== rentalToDelete.id));
+        setShowDeleteModal(false);
+        setRentalToDelete(null);
+      })
+      .catch(err => {
+        console.error("Törlés sikertelen:", err);
+        setShowDeleteModal(false);
+      });
+  };
+
+  const handleDeleteEvent = (event: Event) => {
+    setEventToDelete(event);
+    setShowDeleteEventModal(true);
+  };
+
+  const confirmDeleteEvent = () => {
+    if (!eventToDelete) return;
+    axios.delete(`http://localhost:3000/events/${eventToDelete.id}`)
+      .then(() => {
+        setEvents(events.filter(e => e.id !== eventToDelete.id));
+        setShowDeleteEventModal(false);
+        setEventToDelete(null);
+      })
+      .catch(err => {
+        console.error("Esemény törlése sikertelen:", err);
+        setShowDeleteEventModal(false);
+      });
+  };
+
+  const handleAddEvent = () => {
+    axios.post("http://localhost:3000/events", newEvent)
+      .then(res => {
+        setEvents(prev => [...prev, res.data]);
+        setShowAddEventModal(false);
+        setNewEvent({
+          startDate: "",
+          endDate: "",
+          name: "",
+          availablePlaces: 0,
+          accommodation: 0,
+          reserved: 0
+        });
+      })
+      .catch(err => {
+        console.error("Nem sikerült hozzáadni az eseményt:", err);
+      });
   };
 
   return (
     <div className="d-flex vh-100">
-      {/* Oldalsó menü (Navbar) */}
       <div className="d-flex flex-column bg-dark text-white p-2 position-fixed top-0 start-0 h-100 align-items-center navbar-container">
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/dashboard")}>
-          <RiDashboard3Fill size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/esemenyek")}>
-          <FaCalendarAlt size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/foglalas")}>
-          <FaCartPlus size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn " onClick={() => navigate("/profil")}>
-          <FaUserAlt size={24} className="nav-icon" />
-        </button>
+        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/dashboard")}> <RiDashboard3Fill size={24} className="nav-icon" /> </button>
+        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/beallitasok")}> <FaCalendarAlt size={24} className="nav-icon" /> </button>
+        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/foglalas")}> <FaCartPlus size={24} className="nav-icon" /> </button>
+        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/profil")}> <FaUserAlt size={24} className="nav-icon" /> </button>
         <div className="mt-auto mb-3">
-          <button className="btn btn-dark nav-btn active-nav-icon" onClick={() => navigate("/beallitasok")}>
-            <FaPencil size={24} className="nav-icon" />
-          </button>
+          <button className="btn btn-dark nav-btn active-nav-icon" onClick={() => navigate("/beallitasok")}> <FaPencil size={24} className="nav-icon" /> </button>
         </div>
-        <button onClick={handleLogout} className="btn nav-btn logout-btn mb-2">
-          <IoIosLogOut size={24} className="nav-icon logout-icon" />
-        </button>
+        <button onClick={handleLogout} className="btn nav-btn logout-btn mb-2"> <IoIosLogOut size={24} className="nav-icon logout-icon" /> </button>
       </div>
 
-      {/* Fő tartalom */}
       <div className="flex-grow-1 ms-5 p-3">
-        <div className="mb-3">
-          <Button variant={activeView === "events" ? "primary" : "secondary"} className="me-2" onClick={() => setActiveView("events")}>
-            Események
-          </Button>
-          <Button variant={activeView === "rentals" ? "primary" : "secondary"} className="me-2" onClick={() => setActiveView("rentals")}>
-            Bérlések
-          </Button>
-          <Button variant={activeView === "users" ? "primary" : "secondary"} onClick={() => setActiveView("users")}>
-            Felhasználók
-          </Button>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h2>Admin panel</h2>
+          <ButtonGroup>
+            <ToggleButton id="radio-events" type="radio" variant="outline-primary" name="view" value="events" checked={view === "events"} onChange={(e) => setView(e.currentTarget.value)}>Események</ToggleButton>
+            <ToggleButton id="radio-rentals" type="radio" variant="outline-primary" name="view" value="rentals" checked={view === "rentals"} onChange={(e) => setView(e.currentTarget.value)}>Bérlések</ToggleButton>
+            <ToggleButton id="radio-users" type="radio" variant="outline-primary" name="view" value="users" checked={view === "users"} onChange={(e) => setView(e.currentTarget.value)}>Felhasználók</ToggleButton>
+          </ButtonGroup>
         </div>
 
-        {activeView === "events" && (
-          <div>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h2>Események</h2>
-              <Button variant="success" onClick={() => { setEditingEvent(null); setEventForm({ name: "", date: "", description: "" }); setShowEventModal(true); }}>
+        {view === "events" && (
+          <div className="table-responsive mb-5" style={{ height: "calc(100vh - 200px)", overflowY: "auto" }}>
+            <div className="d-flex justify-content-end mb-2">
+              <Button variant="success" onClick={() => setShowAddEventModal(true)}>
                 <AiOutlinePlus size={20} />
               </Button>
             </div>
-            <div className="table-responsive" style={{ height: "calc(100vh - 150px)", overflowY: "auto" }}>
-              <Table striped bordered hover>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Név</th>
-                    <th>Dátum</th>
-                    <th>Leírás</th>
-                    <th>Műveletek</th>
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Esemény</th>
+                  <th>Kezdés</th>
+                  <th>Befejezés</th>
+                  <th>Szabad helyek</th>
+                  <th>Foglalt helyek</th>
+                  <th>Műveletek</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((event) => (
+                  <tr key={event.id}>
+                    <td>{event.id}</td>
+                    <td>{event.name}</td>
+                    <td>{new Date(event.startDate).toLocaleString()}</td>
+                    <td>{new Date(event.endDate).toLocaleString()}</td>
+                    <td>{event.availablePLaces}</td>
+                    <td>{event.reserved}</td>
+                    <td>
+                      <Button variant="danger" size="sm" onClick={() => handleDeleteEvent(event)}>
+                        <FaTrash size={16} />
+                      </Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {events.map((event) => (
-                    <tr key={event.id}>
-                      <td>{event.id}</td>
-                      <td>{event.name}</td>
-                      <td>{event.date}</td>
-                      <td>{event.description}</td>
-                      <td>
-                        <Button variant="warning" size="sm" className="me-2" onClick={() => handleEditEvent(event)}>
-                          <FaPencil size={16} />
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => handleDeleteEvent(event)}>
-                          <FaTrash size={16} />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
+                ))}
+              </tbody>
+            </Table>
           </div>
         )}
 
-        {activeView === "rentals" && (
-          <div>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h2>Bérlések</h2>
-              <Button variant="success" onClick={() => { setEditingRental(null); setRentalForm({ item: "", date: "" }); setShowRentalModal(true); }}>
-                <AiOutlinePlus size={20} />
-              </Button>
-            </div>
-            <div className="table-responsive" style={{ height: "calc(100vh - 150px)", overflowY: "auto" }}>
-              <Table striped bordered hover>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Item</th>
-                    <th>Dátum</th>
-                    <th>Műveletek</th>
+<Modal show={showDeleteEventModal} onHide={() => setShowDeleteEventModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Esemény törlése</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            Biztosan törölni szeretnéd ezt az eseményt?
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowDeleteEventModal(false)}>Mégse</Button>
+            <Button variant="danger" onClick={confirmDeleteEvent}>Törlés</Button>
+          </Modal.Footer>
+        </Modal>
+
+        <Modal show={showAddEventModal} onHide={() => setShowAddEventModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Új esemény hozzáadása</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form>
+              <Form.Group className="mb-2">
+                <Form.Label>Név</Form.Label>
+                <Form.Control type="text" value={newEvent.name} onChange={(e) => setNewEvent({...newEvent, name: e.target.value})} />
+              </Form.Group>
+              <Form.Group className="mb-2">
+                <Form.Label>Kezdés</Form.Label>
+                <Form.Control type="datetime-local" value={newEvent.startDate} onChange={(e) => setNewEvent({...newEvent, startDate: e.target.value})} />
+              </Form.Group>
+              <Form.Group className="mb-2">
+                <Form.Label>Befejezés</Form.Label>
+                <Form.Control type="datetime-local" value={newEvent.endDate} onChange={(e) => setNewEvent({...newEvent, endDate: e.target.value})} />
+              </Form.Group>
+              <Form.Group className="mb-2">
+                <Form.Label>Szabad helyek</Form.Label>
+                <Form.Control type="number" value={newEvent.availablePlaces} onChange={(e) => setNewEvent({...newEvent, availablePlaces: parseInt(e.target.value)})} />
+              </Form.Group>
+              <Form.Group className="mb-2">
+                <Form.Label>Szállás</Form.Label>
+                <Form.Control type="number" value={newEvent.accommodation} onChange={(e) => setNewEvent({...newEvent, accommodation: parseInt(e.target.value)})} />
+              </Form.Group>
+              <Form.Group className="mb-2">
+                <Form.Label>Foglalt helyek</Form.Label>
+                <Form.Control type="number" value={newEvent.reserved} onChange={(e) => setNewEvent({...newEvent, reserved: parseInt(e.target.value)})} />
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowAddEventModal(false)}>Mégse</Button>
+            <Button variant="primary" onClick={handleAddEvent}>Hozzáadás</Button>
+          </Modal.Footer>
+        </Modal>
+
+        {view === "rentals" && (
+          <div className="table-responsive mb-5" style={{ height: "calc(100vh - 200px)", overflowY: "auto" }}>
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>UserID</th>
+                  <th>eventID</th>
+                  <th>feetSize</th>
+                  <th>skateID</th>
+                  <th>Műveletek</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rentals.map((rental) => (
+                  <tr key={rental.id}>
+                    <td>{rental.id}</td>
+                    <td>{rental.userID}</td>
+                    <td>{rental.eventID}</td>
+                    <td>{rental.feetSize}</td>
+                    <td>{rental.skateID}</td>
+                    <td>
+                      <Button variant="warning" size="sm" className="me-2" onClick={() => handleEditRental(rental)}>
+                        <FaPencil size={16} />
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => handleDeleteRental(rental)}>
+                        <FaTrash size={16} />
+                      </Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rentals.map((rental) => (
-                    <tr key={rental.id}>
-                      <td>{rental.id}</td>
-                      <td>{rental.item}</td>
-                      <td>{rental.date}</td>
-                      <td>
-                        <Button variant="danger" size="sm" onClick={() => handleDeleteRental(rental)}>
-                          <FaPencil size={16} />
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => handleDeleteRental(rental)}>
-                          <FaTrash size={16} />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
+                ))}
+              </tbody>
+            </Table>
           </div>
         )}
 
-        {activeView === "users" && (
-          <div>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h2>Felhasználók</h2>
-              <div className="d-flex align-items-center">
-                <Form.Control
-                  type="text"
-                  placeholder="Keresés név vagy email alapján"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: "300px" }}
-                  className="me-2"
-                />
-                <Button variant="success" onClick={() => { setEditingUser(null); setUserForm({ username: "", email: "", role: 0, password: "" }); setShowUserModal(true); }}>
-                  <AiOutlinePlus size={20} />
-                </Button>
-              </div>
-            </div>
-            <div className="table-responsive" style={{ height: "calc(100vh - 150px)", overflowY: "auto" }}>
-              <Table striped bordered hover>
-                <thead>
-                  <tr>
-                    <th onClick={() => requestSort("id")} style={{ cursor: "pointer" }}>
-                      ID {sortConfig.key === "id" && (sortConfig.direction === "asc" ? "▲" : sortConfig.direction === "desc" ? "▼" : "")}
-                    </th>
-                    <th onClick={() => requestSort("Name")} style={{ cursor: "pointer" }}>
-                      Név {sortConfig.key === "Name" && (sortConfig.direction === "asc" ? "▲" : sortConfig.direction === "desc" ? "▼" : "")}
-                    </th>
-                    <th onClick={() => requestSort("Email")} style={{ cursor: "pointer" }}>
-                      Email {sortConfig.key === "Email" && (sortConfig.direction === "asc" ? "▲" : sortConfig.direction === "desc" ? "▼" : "")}
-                    </th>
-                    <th onClick={() => requestSort("Role")} style={{ cursor: "pointer" }}>
-                      Szerep {sortConfig.key === "Role" && (sortConfig.direction === "asc" ? "▲" : sortConfig.direction === "desc" ? "▼" : "")}
-                    </th>
-                    <th>Műveletek</th>
+        {view === "users" && (
+          <div className="table-responsive mb-5" style={{ height: "calc(100vh - 200px)", overflowY: "auto" }}>
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Név</th>
+                  <th>Email</th>
+                  <th>Szerep</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.id}</td>
+                    <td>{u.Name}</td>
+                    <td>{u.Email}</td>
+                    <td>{u.Role === 1 ? "Admin" : "Felhasználó"}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td>{user.id}</td>
-                      <td>{user.Name}</td>
-                      <td>{user.Email}</td>
-                      <td>{user.Role === 1 ? "Admin" : "Felhasználó"}</td>
-                      <td>
-                        <Button variant="warning" size="sm" className="me-2" onClick={() => handleEditUser(user)}>
-                          <FaPencil size={16} />
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => handleDeleteUser(user)}>
-                          <FaTrash size={16} />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
+                ))}
+              </tbody>
+            </Table>
           </div>
         )}
+
+        <Modal show={showDeleteEventModal} onHide={() => setShowDeleteEventModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Esemény törlése</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>Biztosan törölni szeretnéd ezt az eseményt?</Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowDeleteEventModal(false)}>Mégse</Button>
+            <Button variant="danger" onClick={confirmDeleteEvent}>Törlés</Button>
+          </Modal.Footer>
+        </Modal>
+
+        <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Bérlés törlése</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>Biztosan törölni szeretnéd ezt a bérlést?</Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>Mégse</Button>
+            <Button variant="danger" onClick={confirmDeleteRental}>Törlés</Button>
+          </Modal.Footer>
+        </Modal>
+
+        <Modal show={showEditModal} onHide={() => setShowEditModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Bérlés szerkesztése</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {editError && <Alert variant="danger">{editError}</Alert>}
+            {editRental && (
+              <Form>
+                <Form.Group className="mb-3">
+                  <Form.Label>Lábméret</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={editRental.feetSize}
+                    onChange={(e) => setEditRental({ ...editRental, feetSize: parseInt(e.target.value) })}
+                  />
+                </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Korcsolya ID</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={editRental.skateID}
+                    onChange={(e) => setEditRental({ ...editRental, skateID: parseInt(e.target.value) })}
+                  />
+                </Form.Group>
+              </Form>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowEditModal(false)}>Mégse</Button>
+            <Button variant="primary" onClick={handleSaveRental}>Mentés</Button>
+          </Modal.Footer>
+        </Modal>
       </div>
-
-      {/* Esemény Modal */}
-      <Modal show={showEventModal} onHide={() => setShowEventModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>{editingEvent ? "Esemény szerkesztése" : "Új esemény hozzáadása"}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group controlId="formEventName">
-              <Form.Label>Név</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Add meg az esemény nevét"
-                value={eventForm.name}
-                onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })}
-              />
-            </Form.Group>
-            <Form.Group controlId="formEventDate" className="mt-2">
-              <Form.Label>Dátum</Form.Label>
-              <Form.Control
-                type="date"
-                value={eventForm.date}
-                onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
-              />
-            </Form.Group>
-            <Form.Group controlId="formEventDescription" className="mt-2">
-              <Form.Label>Leírás</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                placeholder="Add meg az esemény leírását"
-                value={eventForm.description}
-                onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
-              />
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowEventModal(false)}>Mégse</Button>
-          <Button variant="primary" onClick={handleSaveEvent}>Mentés</Button>
-        </Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowEventModal(false)}>Mégse</Button>
-          <Button variant="primary" onClick={handleSaveEvent}>Mentés</Button>
-      {/* Bérlés Modal */}
-      <Modal show={showRentalModal} onHide={() => setShowRentalModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>{editingRental ? "Bérlés szerkesztése" : "Új bérlés hozzáadása"}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group controlId="formRentalItem">
-              <Form.Label>Item</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Add meg a bérlés tárgyát"
-                value={rentalForm.item}
-                onChange={(e) => setRentalForm({ ...rentalForm, item: e.target.value })}
-              />
-            </Form.Group>
-            <Form.Group controlId="formRentalDate" className="mt-2">
-              <Form.Label>Dátum</Form.Label>
-              <Form.Control
-                type="date"
-                value={rentalForm.date}
-                onChange={(e) => setRentalForm({ ...rentalForm, date: e.target.value })}
-              />
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowRentalModal(false)}>Mégse</Button>
-          <Button variant="primary" onClick={handleSaveRental}>Mentés</Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Felhasználó Modal */}
-      </Modal>
-
-      {/* Felhasználó Modal */}
-      <Modal show={showUserModal} onHide={() => setShowUserModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>{editingUser ? "Felhasználó szerkesztése" : "Új felhasználó hozzáadása"}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group controlId="formUserName">
-              <Form.Label>Felhasználónév</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Add meg a felhasználó nevét"
-                value={userForm.username}
-                onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-              />
-            </Form.Group>
-            <Form.Group controlId="formUserEmail" className="mt-2">
-              <Form.Label>Email</Form.Label>
-              <Form.Control
-                type="email"
-                placeholder="Add meg a felhasználó email címét"
-                value={userForm.email}
-                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-              />
-            </Form.Group>
-            <Form.Group controlId="formUserPassword" className="mt-2">
-              <Form.Label>Jelszó</Form.Label>
-              <Form.Control
-                type="password"
-                placeholder="Add meg a jelszót (csak ha módosítani szeretnéd)"
-                value={userForm.password}
-                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-              />
-            </Form.Group>
-            <Form.Group controlId="formUserRole" className="mt-2">
-              <Form.Label>Szerep</Form.Label>
-              <Form.Select
-                value={userForm.role}
-                onChange={(e) => setUserForm({ ...userForm, role: parseInt(e.target.value) })}
-              >
-                <option value={0}>Felhasználó</option>
-                <option value={1}>Admin</option>
-              </Form.Select>
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowUserModal(false)}>Mégse</Button>
-          <Button variant="primary" onClick={handleSaveUser} disabled={!isUserFormValid()}>
-            Mentés
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Törlés megerősítő Modal */}
-      <Modal show={showDeleteConfirmModal} onHide={() => setShowDeleteConfirmModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>Megerősítés</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          Biztosan törölni szeretnéd a {deleteItemType === "event" ? "eseményt" : deleteItemType === "rental" ? "bérlést" : "felhasználót"}?
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>Mégse</Button>
-            <Button variant="danger" onClick={() => {
-              if (deleteItemType === "event" && deleteItem) {
-                setEvents(events.filter(e => e.id !== deleteItem.id));
-              } else if (deleteItemType === "rental" && deleteItem) {
-                setRentals(rentals.filter(r => r.id !== deleteItem.id));
-              } else if (deleteItemType === "user" && deleteItem) {
-                fetch(`https://api-generator.retool.com/NnWL2O/felhasznalok/${deleteItem.id}`, { method: "DELETE" })
-                  .then(response => {
-                    if (response.ok) {
-                      setUsers(users.filter(u => u.id !== deleteItem.id));
-                    } else {
-                      console.error("Hiba a felhasználó törlésekor");
-                    }
-                  })
-                  .catch(error => console.error("Hiba a felhasználó törlésekor:", error));
-              }
-              setShowDeleteConfirmModal(false);
-            }}>Igen</Button>
-        </Modal.Footer>
-      </Modal>
     </div>
   );
 }

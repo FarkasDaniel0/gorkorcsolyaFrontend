@@ -1,362 +1,209 @@
-import { useNavigate } from "react-router-dom";
-import "bootstrap/dist/css/bootstrap.min.css";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
 import { RiDashboard3Fill } from "react-icons/ri";
-import { FaCalendarAlt } from "react-icons/fa";
-import { FaCartPlus } from "react-icons/fa";
-import { FaUserAlt } from "react-icons/fa";
+import { FaCalendarAlt, FaCartPlus, FaUserAlt } from "react-icons/fa";
 import { FaPencil } from "react-icons/fa6";
 import { IoIosLogOut } from "react-icons/io";
-import { useState, useMemo } from "react";
 import { Modal, Button, Form } from "react-bootstrap";
 
-interface Event {
-  id: number;
-  esemény: string;
-  dátum: string;
-  berles?: boolean; 
-}
+const BASE_API_URL = "http://localhost:3000";
 
-interface CardEvent {
-  id: number;
-  title: string;
-  description: string;
-  startTime: string;
-  endTime: string;
-  ticketPrice: string;
-}
-
-type SortDirection = "asc" | "desc" | "default";
-
-// Ez a 4 esemény jelenik meg a táblázatban kezdetben
-const alapEsemenyek: Event[] = [
-  { id: 1, esemény: "Görkori verseny", dátum: "2024-04-01", berles: true },
-  { id: 2, esemény: "Éjszakai túra", dátum: "2024-05-10", berles: false },
-  { id: 3, esemény: "Hétvégi verseny", dátum: "2024-06-15", berles: true },
-  { id: 4, esemény: "Közösségi görkorizás", dátum: "2024-07-05", berles: false },
-];
-
-// Ez a lista adja a "rögzített eseményeket" a lenyíló menühöz
-// (akár megegyezhet az alapEsemenyek tartalmával, vagy lehet bővebb)
-const valaszthatoEsemenyek: Omit<Event, "berles">[] = [
-  { id: 1, esemény: "Görkori verseny", dátum: "2024-04-01" },
-  { id: 2, esemény: "Éjszakai túra", dátum: "2024-05-10" },
-  { id: 3, esemény: "Hétvégi verseny", dátum: "2024-06-15" },
-  { id: 4, esemény: "Közösségi görkorizás", dátum: "2024-07-05" },
-];
-
-export default function Esemenyek() {
+export default function Foglalas() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [userId, setUserId] = useState<string | null>(localStorage.getItem("userId"));
+  const [userRole, setUserRole] = useState<string | number>("");
+  const [events, setEvents] = useState<any[]>([]);
+  const [skates, setSkates] = useState<any[]>([]);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [feetSize, setFeetSize] = useState("");
+  const [skateId, setSkateId] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  // Alapértelmezett adat: 4 sor a táblázatban
-  const [data, setData] = useState<Event[]>(alapEsemenyek);
-
-  // Egyedi azonosító növelése, ha új sort adunk hozzá
-  // (hogy ne ütközzön a meglévő 1-4-es ID-kal, kezdhetjük pl. 5-tel)
-  const [nextUniqueId, setNextUniqueId] = useState<number>(5);
-
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-
-  // Az éppen szerkesztett/törlendő esemény
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-
-  // A lenyíló menüben kiválasztott esemény ID-je
-  const [newEventId, setNewEventId] = useState<number>(0);
-
-  // Checkbox, hogy bérlést kér-e
-  const [rentRequested, setRentRequested] = useState<boolean>(false);
-
-  // Rendezés beállításai
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
-    key: "",
-    direction: "default",
-  });
+  useEffect(() => {
+    if (!userId) {
+      navigate("/");
+    }
+  }, [userId]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    localStorage.clear();
+    setUserId(null);
     navigate("/");
   };
 
+  useEffect(() => {
+    if (!userId) return;
 
-  // A rendezett adatok kiszámolása a sortConfig alapján
+    axios.get(`${BASE_API_URL}/events/?id=${userId}`)
+      .then((res) => setEvents(res.data))
+      .catch((err) => console.error("Nem sikerült betölteni az eseményeket:", err));
 
-  // Szerkesztés
-  const handleEdit = (event: Event) => {
-    setSelectedEvent({ ...event });
-    setShowEditModal(true);
-  };
+    axios.get(`${BASE_API_URL}/currentUser/${userId}`)
+      .then((res) => setUserRole(res.data?.role))
+      .catch((err) => console.error("Nem sikerült lekérni a felhasználó szerepkörét:", err));
 
-  const handleSaveEdit = () => {
-    if (selectedEvent) {
-      // Csak a bérlés mezőt módosítjuk (vagy további mezőket is, ha szeretnénk)
-      setData(
-        data.map((item) =>
-          item.id === selectedEvent.id ? { ...item, berles: selectedEvent.berles } : item
-        )
-      );
-      setShowEditModal(false);
+    axios.get(`${BASE_API_URL}/skates`)
+      .then((res) => setSkates(res.data))
+      .catch((err) => console.error("Nem sikerült betölteni a korcsolyákat:", err));
+  }, [userId]);
+
+  useEffect(() => {
+    if (errorMessage || successMessage) {
+      const timer = setTimeout(() => {
+        setErrorMessage("");
+        setSuccessMessage("");
+      }, 15000);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [errorMessage, successMessage]);
 
-  // Törlés
-  const handleDelete = (event: Event) => {
-    setSelectedEvent({ ...event });
-    setShowDeleteModal(true);
-  };
+  const handleBooking = async () => {
+    if (!userId || !selectedEvent) return;
+    try {
+      const finalFeetSize = feetSize ? parseInt(feetSize) : 0;
+      const finalSkateId = feetSize ? skateId : 1;
 
-  const confirmDelete = () => {
-    if (selectedEvent) {
-      setData(data.filter((item) => item.id !== selectedEvent.id));
+      await axios.post(`${BASE_API_URL}/rents`, {
+        UserId: parseInt(userId),
+        EventId: selectedEvent.id,
+        FeetSize: finalFeetSize,
+        SkateId: finalSkateId
+      });
+      setShowBookingModal(false);
+      setFeetSize("");
+      setSkateId(0);
       setSelectedEvent(null);
+      setSuccessMessage("Sikeres foglalás!");
+    } catch (error: any) {
+      const backendMessage =
+        error.response?.data?.message ||
+        error.response?.data ||
+        "Hiba történt a foglalás során. Próbáld újra.";
+      setErrorMessage(backendMessage);
     }
   };
-  // Új esemény hozzáadása
-  const handleAddEvent = () => {
-    setShowAddModal(true);
-  };
 
-  // Mentés az Új esemény modalban
-  // Csak rögzített eseményekből lehet választani
-  const saveNewEvent = () => {
-    if (newEventId > 0) {
-      // Megkeressük a kiválasztott eseményt
-      const chosen = valaszthatoEsemenyek.find((e) => e.id === newEventId);
-      if (chosen) {
-        // Létrehozunk egy új sort, egyedi ID-val
-        const newRow: Event = {
-          id: nextUniqueId,
-          esemény: chosen.esemény,
-          dátum: chosen.dátum,
-          berles: rentRequested,
-        };
-        setData([...data, newRow]);
-        setNextUniqueId(nextUniqueId + 1);
-      }
+  const handleSkateChange = (selectedId: number) => {
+    setSkateId(selectedId);
+    const selectedSkate = skates.find((s) => s.id === selectedId);
+    if (selectedSkate && selectedSkate.size) {
+      setFeetSize(String(selectedSkate.size));
     }
-    // Modal bezárása és mezők alaphelyzetbe állítása
-    setShowAddModal(false);
-    setNewEventId(0);
-    setRentRequested(false);
   };
 
-  // Új állapotok a korcsolya bérléshez
-const [showRentalModal, setShowRentalModal] = useState(false);
-const [selectedRentalEvent, setSelectedRentalEvent] = useState<CardEvent | null>(null);
-const [rentalRequested, setRentalRequested] = useState(false);
+  const formatGender = (gender: number) => {
+    if (gender === 1) return "Nő";
+    if (gender === 2) return "Férfi";
+    return "Egyéb";
+  };
 
-// Új state változók a modal kezeléséhez
-const [skateType, setSkateType] = useState("soros");
-const [skateSize, setSkateSize] = useState("");
-
-
-// Mintapélda események, melyeket a kártyákban jelenítünk meg
-const cardEvents = [
-  {
-    id: 1,
-    title: "Görkori verseny",
-    description: "Fedezd fel a görkorcsolyázás izgalmait!",
-    startTime: "2024-04-01 10:00",
-    endTime: "2024-04-01 14:00",
-    ticketPrice: "5000 Ft",
-  },
-  {
-    id: 2,
-    title: "Éjszakai túra",
-    description: "Tapasztald meg a város éjszakai életét görkorcsolyázva.",
-    startTime: "2024-05-10 18:00",
-    endTime: "2024-05-10 22:00",
-    ticketPrice: "7000 Ft",
-  },
-  {
-    id: 3,
-    title: "Hétvégi verseny",
-    description: "Vegyél részt a hétvégi korcsolya versenyen!",
-    startTime: "2024-06-15 09:00",
-    endTime: "2024-06-15 12:00",
-    ticketPrice: "6000 Ft",
-  },
-  {
-    id: 1,
-    title: "Görkori verseny",
-    description: "Fedezd fel a görkorcsolyázás izgalmait!",
-    startTime: "2024-04-01 10:00",
-    endTime: "2024-04-01 14:00",
-    ticketPrice: "5000 Ft",
-  },
-  {
-    id: 2,
-    title: "Éjszakai túra",
-    description: "Tapasztald meg a város éjszakai életét görkorcsolyázva.",
-    startTime: "2024-05-10 18:00",
-    endTime: "2024-05-10 22:00",
-    ticketPrice: "7000 Ft",
-  },
-  {
-    id: 3,
-    title: "Hétvégi verseny",
-    description: "Vegyél részt a hétvégi korcsolya versenyen!",
-    startTime: "2024-06-15 09:00",
-    endTime: "2024-06-15 12:00",
-    ticketPrice: "6000 Ft",
-  },
-  {
-    id: 1,
-    title: "Görkori verseny",
-    description: "Fedezd fel a görkorcsolyázás izgalmait!",
-    startTime: "2024-04-01 10:00",
-    endTime: "2024-04-01 14:00",
-    ticketPrice: "5000 Ft",
-  },
-  {
-    id: 2,
-    title: "Éjszakai túra",
-    description: "Tapasztald meg a város éjszakai életét görkorcsolyázva.",
-    startTime: "2024-05-10 18:00",
-    endTime: "2024-05-10 22:00",
-    ticketPrice: "7000 Ft",
-  },
-  {
-    id: 3,
-    title: "Hétvégi verseny",
-    description: "Vegyél részt a hétvégi korcsolya versenyen!",
-    startTime: "2024-06-15 09:00",
-    endTime: "2024-06-15 12:00",
-    ticketPrice: "6000 Ft",
-  },
-];
-
+  const filteredSkates = feetSize
+    ? skates.filter((s) => String(s.size) === feetSize)
+    : skates;
 
   return (
     <div className="d-flex vh-100">
-      {/* Oldalsó menü (Navbar) */}
-      <div className="d-flex flex-column bg-dark text-white p-2 position-fixed top-0 start-0 h-100 align-items-center navbar-container">
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/dashboard")}>
-          <RiDashboard3Fill size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn " onClick={() => navigate("/esemenyek")}>
-          <FaCalendarAlt size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn active-nav-icon" onClick={() => navigate("/berlesek")}>
-          <FaCartPlus size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/profil")}>
-          <FaUserAlt size={24} className="nav-icon" />
-        </button>
-        <div className="mt-auto mb-3">
-          <button className="btn btn-dark nav-btn" onClick={() => navigate("/beallitasok")}>
-            <FaPencil size={24} className="nav-icon" />
-          </button>
+      <div className="d-flex flex-column bg-dark text-white p-2 position-fixed top-0 start-0 h-100 align-items-center justify-content-between navbar-container">
+        <div className="d-flex flex-column align-items-center">
+          <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/dashboard")}> <RiDashboard3Fill size={24} className="nav-icon" /> </button>
+          <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/esemenyek")}> <FaCalendarAlt size={24} className="nav-icon" /> </button>
+          <button className="btn btn-dark mb-3 nav-btn active-nav-icon" onClick={() => navigate("/berlesek")}> <FaCartPlus size={24} className="nav-icon" /> </button>
+          <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/profil")}> <FaUserAlt size={24} className="nav-icon" /> </button>
         </div>
-        <button onClick={handleLogout} className="btn nav-btn logout-btn mb-2">
-          <IoIosLogOut size={24} className="nav-icon logout-icon" />
-        </button>
+        <div className="d-flex flex-column align-items-center">
+          <div style={{ height: "40px", marginBottom: "12px" }}>
+            {userRole === 0 ? (
+              <button className="btn btn-dark nav-btn" onClick={() => navigate("/beallitasok")}> <FaPencil size={24} className="nav-icon" /> </button>
+            ) : (
+              <div style={{ width: "40px" }}></div>
+            )}
+          </div>
+          <button onClick={handleLogout} className="btn nav-btn logout-btn mb-2"> <IoIosLogOut size={24} className="nav-icon logout-icon" /> </button>
+        </div>
       </div>
 
-      {/* Fő tartalom */}
-        {/* Fő tartalom */}
-<div className="flex-grow-1 p-4" style={{ marginLeft: "5%", height: "100vh", overflowY: "auto" }}>
-  <div className="container">
-    <div className="row">
-      {cardEvents.map((event) => (
-        <div key={event.id} className="col-md-4 mb-4">
-          <div className="card h-100">
-            <div className="card-body">
-              <h5 className="card-title">{event.title}</h5>
-              <p className="card-text">{event.description}</p>
-              <p className="card-text"><strong>Kezdés:</strong> {event.startTime}</p>
-              <p className="card-text"><strong>Befejezés:</strong> {event.endTime}</p>
-              <p className="card-text"><strong>Jegyár:</strong> {event.ticketPrice}</p>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setSelectedRentalEvent(event);
-                  setShowRentalModal(true);
-                }}
-              >
-                Jegyvásárlás
-              </Button>
+      <div className="flex-grow-1 p-4" style={{ marginLeft: "5%", overflowY: "auto" }}>
+        <h2>Elérhető események</h2>
+
+        {successMessage && <div className="login-alert success-alert">{successMessage}</div>}
+
+        <div className="row">
+          {events.map((event) => (
+            <div key={event.id} className="col-md-4 mb-4">
+              <div className="card h-100">
+                <div className="card-body">
+                  <h5 className="card-title">{event.name}</h5>
+                  <p><strong>Kezdés:</strong> {new Date(event.startDate).toLocaleString()}</p>
+                  <p><strong>Befejezés:</strong> {new Date(event.endDate).toLocaleString()}</p>
+                  <p><strong>Szabad helyek:</strong> {event.availablePLaces}</p>
+                  <p><strong>Foglalt helyek:</strong> {event.reserved}</p>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setSelectedEvent(event);
+                      setShowBookingModal(true);
+                      setErrorMessage("");
+                    }}
+                  >
+                    Részletek / Foglalás
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
-      ))}
-    </div>
-  </div>
+      </div>
 
-      {/* Korcsolya bérlés Modal */}
-<Modal show={showRentalModal} onHide={() => setShowRentalModal(false)}>
-  <Modal.Header closeButton>
-    <Modal.Title>Jegyvásárlás és bérlés</Modal.Title>
-  </Modal.Header>
-  <Modal.Body>
-    {selectedRentalEvent && (
-      <Form>
-        <h5>{selectedRentalEvent.title}</h5>
-        <p>{selectedRentalEvent.description}</p>
-        <p><strong>Kezdés:</strong> {selectedRentalEvent.startTime}</p>
-        <p><strong>Befejezés:</strong> {selectedRentalEvent.endTime}</p>
-        <p><strong>Jegyár:</strong> {selectedRentalEvent.ticketPrice}</p>
-        <Form.Check
-          type="checkbox"
-          label="Igen, szeretnék korcsolyát bérelni"
-          checked={rentalRequested}
-          onChange={(e) => setRentalRequested(e.target.checked)}
-        />
-        {rentalRequested && (
-          <>
-            <Form.Group className="mb-3">
-              <Form.Label>Korcsolya típusa</Form.Label>
-              <Form.Select
-                value={skateType}
-                onChange={(e) => setSkateType(e.target.value)}
-              >
-                <option value="soros">Soros</option>
-                <option value="négykerekű">Négykerekű</option>
-              </Form.Select>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Méret</Form.Label>
-              <Form.Control
-                type="text"
-                value={skateSize}
-                onChange={(e) => setSkateSize(e.target.value)}
-                placeholder="Add meg a méretet"
-              />
-            </Form.Group>
-          </>
-        )}
-      </Form>
-    )}
-  </Modal.Body>
-  <Modal.Footer>
-    <Button variant="secondary" onClick={() => setShowRentalModal(false)}>
-      Mégse
-    </Button>
-    <Button
-      variant="primary"
-      onClick={() => {
-        console.log(`Korcsolya bérlés: ${rentalRequested ? "igen" : "nem"}`);
-        if (rentalRequested) {
-          console.log(`Kiválasztott típus: ${skateType}, Méret: ${skateSize}`);
-        }
-        // Itt végezheted el a mentési logikát (például API hívás)
-        setShowRentalModal(false);
-        setRentalRequested(false);
-        setSkateType("soros");
-        setSkateSize("");
-      }}
-    >
-      Jegyvásárlás
-    </Button>
-  </Modal.Footer>
-</Modal>
-
-
-
-
-</div>
-
-
+      {/* Foglalás modal */}
+      <Modal show={showBookingModal} onHide={() => setShowBookingModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Foglalás</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {errorMessage && <div className="login-alert error-alert">{errorMessage}</div>}
+          {selectedEvent && (
+            <Form>
+              <Form.Group className="mb-3">
+                <Form.Label>Esemény neve</Form.Label>
+                <Form.Control type="text" value={selectedEvent.name} disabled />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Lábméret</Form.Label>
+                <Form.Control
+                  type="number"
+                  placeholder="pl. 38"
+                  value={feetSize}
+                  min={38}
+                  max={45}
+                  onChange={(e) => setFeetSize(e.target.value)}
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Korcsolya kiválasztása</Form.Label>
+                <Form.Select
+                  value={skateId}
+                  onChange={(e) => handleSkateChange(Number(e.target.value))}
+                >
+                  <option value={0}>Válassz korcsolyát...</option>
+                  {filteredSkates.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      #{s.id} - Méret: {s.size}, Típus: {s.type}, Nem: {formatGender(s.gender)}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            </Form>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowBookingModal(false)}>Mégse</Button>
+          <Button variant="primary" onClick={handleBooking}>Foglalás</Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }

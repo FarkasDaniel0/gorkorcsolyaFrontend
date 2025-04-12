@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
+const BASE_API_URL = "http://localhost:3000";
+
 export default function Register() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -23,7 +25,7 @@ export default function Register() {
       const timer = setTimeout(() => {
         setErrorMessage("");
         setSuccessMessage("");
-      }, 2000);
+      }, 15000);
       return () => clearTimeout(timer);
     }
   }, [errorMessage, successMessage]);
@@ -44,27 +46,22 @@ export default function Register() {
     }
 
     try {
-      const response = await axios.post("http://localhost:3000/api/auth/register", {
+      await axios.post(`${BASE_API_URL}/api/auth/register`, {
         registerRequest: {
           email: email,
-          password: password
+          password: password,
         },
         name: username,
-        role: 0
+        role: 1,
       });
 
-      const userId = response.data?.id || response.data?.user?.id;
-      if (userId) {
-        localStorage.setItem("userId", userId);
-      }
-
-      localStorage.setItem("user", username);
+      setSuccessMessage("Sikeres regisztráció! Átirányítás a bejelentkezéshez...");
       setErrorMessage("");
-      setSuccessMessage("Sikeres regisztráció!");
 
       setTimeout(() => {
-        navigate("/dashboard");
+        navigate("/");
       }, 1500);
+
     } catch (error: any) {
       const backendMessage =
         error.response?.data?.message ||
@@ -82,9 +79,7 @@ export default function Register() {
 
   return (
     <div className="login-background">
-      {errorMessage && (
-        <div className="login-alert error-alert">{errorMessage}</div>
-      )}
+      {errorMessage && <div className="login-alert error-alert">{errorMessage}</div>}
       <div className="login-container">
         <div className="login-card">
           <h2 className="login-title">Üdv!</h2>
@@ -131,9 +126,7 @@ export default function Register() {
           </p>
         </div>
       </div>
-      {successMessage && (
-        <div className="login-alert success-alert">{successMessage}</div>
-      )}
+      {successMessage && <div className="login-alert success-alert">{successMessage}</div>}
     </div>
   );
 }

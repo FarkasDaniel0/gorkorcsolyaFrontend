@@ -1,81 +1,73 @@
-import { useNavigate } from "react-router-dom";
-import "bootstrap/dist/css/bootstrap.min.css";
+import { useEffect, useState, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
 import { RiDashboard3Fill } from "react-icons/ri";
-import { FaCalendarAlt } from "react-icons/fa";
-import { FaCartPlus } from "react-icons/fa";
-import { FaUserAlt } from "react-icons/fa";
+import { FaCalendarAlt, FaCartPlus, FaUserAlt } from "react-icons/fa";
 import { FaPencil } from "react-icons/fa6";
 import { IoIosLogOut } from "react-icons/io";
-import { useState, useMemo } from "react";
-import { FaPencilAlt, FaTrash, FaPlus } from "react-icons/fa";
 import { Modal, Button, Form } from "react-bootstrap";
+import { FaPlus, FaTrash } from "react-icons/fa";
 
-interface Event {
-  id: number;
-  esemény: string;
-  dátum: string;
-  berles?: boolean; 
-}
-
-type SortDirection = "asc" | "desc" | "default";
-
-// Ez a 4 esemény jelenik meg a táblázatban kezdetben
-const alapEsemenyek: Event[] = [
-  { id: 1, esemény: "Görkori verseny", dátum: "2024-04-01", berles: true },
-  { id: 2, esemény: "Éjszakai túra", dátum: "2024-05-10", berles: false },
-  { id: 3, esemény: "Hétvégi verseny", dátum: "2024-06-15", berles: true },
-  { id: 4, esemény: "Közösségi görkorizás", dátum: "2024-07-05", berles: false },
-];
-
-// Ez a lista adja a "rögzített eseményeket" a lenyíló menühöz
-// (akár megegyezhet az alapEsemenyek tartalmával, vagy lehet bővebb)
-const valaszthatoEsemenyek: Omit<Event, "berles">[] = [
-  { id: 1, esemény: "Görkori verseny", dátum: "2024-04-01" },
-  { id: 2, esemény: "Éjszakai túra", dátum: "2024-05-10" },
-  { id: 3, esemény: "Hétvégi verseny", dátum: "2024-06-15" },
-  { id: 4, esemény: "Közösségi görkorizás", dátum: "2024-07-05" },
-];
+const BASE_API_URL = "http://localhost:3000";
 
 export default function Esemenyek() {
   const navigate = useNavigate();
-
-  // Alapértelmezett adat: 4 sor a táblázatban
-  const [data, setData] = useState<Event[]>(alapEsemenyek);
-
-  // Egyedi azonosító növelése, ha új sort adunk hozzá
-  // (hogy ne ütközzön a meglévő 1-4-es ID-kal, kezdhetjük pl. 5-tel)
-  const [nextUniqueId, setNextUniqueId] = useState<number>(5);
-
-  const [showEditModal, setShowEditModal] = useState(false);
+  const location = useLocation();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | number>("");
+  const [events, setEvents] = useState<any[]>([]);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [selectedEventDetails, setSelectedEventDetails] = useState<any | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Az éppen szerkesztett/törlendő esemény
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  useEffect(() => {
+    const storedUserId = localStorage.getItem("userId");
+    if (!storedUserId) {
+      navigate("/");
+    } else {
+      setUserId(storedUserId);
+    }
+  }, [navigate]);
 
-  // A lenyíló menüben kiválasztott esemény ID-je
-  const [newEventId, setNewEventId] = useState<number>(0);
+  const handleLogout = () => {
+    localStorage.clear();
+    setUserId(null);
+    navigate("/");
+  };
 
-  // Checkbox, hogy bérlést kér-e
-  const [rentRequested, setRentRequested] = useState<boolean>(false);
+  useEffect(() => {
+    if (!userId) return;
 
-  // Rendezés beállításai
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
+    axios.get(`${BASE_API_URL}/dashboard/${userId}`)
+      .then((res) => {
+        const aktiv = res.data?.aktivBerlesek;
+        if (Array.isArray(aktiv)) {
+          setEvents(aktiv);
+        } else {
+          setEvents([]);
+        }
+      })
+      .catch((err) => {
+        console.error("Nem sikerült betölteni a bérléseket:", err);
+        setErrorMessage("Nem sikerült betölteni a bérléseket.");
+      });
+
+    axios.get(`${BASE_API_URL}/currentUser/${userId}`)
+      .then((res) => setUserRole(res.data?.role))
+      .catch((err) => console.error("Nem sikerült lekérni a felhasználó szerepkörét:", err));
+  }, [userId, location]);
+
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | "default" }>({
     key: "",
     direction: "default",
   });
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    navigate("/");
-  };
-
   const handleSort = (key: string) => {
     if (sortConfig.key !== key) {
-      // Ha más oszlopra kattintunk, először növekvő sorrend
       setSortConfig({ key, direction: "asc" });
     } else {
-      // Ugyanarra kattintva: asc -> desc -> default
       if (sortConfig.direction === "asc") {
         setSortConfig({ key, direction: "desc" });
       } else if (sortConfig.direction === "desc") {
@@ -86,290 +78,160 @@ export default function Esemenyek() {
     }
   };
 
-  // A rendezett adatok kiszámolása a sortConfig alapján
-  const sortedData = useMemo(() => {
-    let sortableItems = [...data];
+  const sortedEvents = useMemo(() => {
+    let sortable = [...events];
     if (sortConfig.key && sortConfig.direction !== "default") {
-      sortableItems.sort((a, b) => {
-        const aVal = a[sortConfig.key as keyof Event];
-        const bVal = b[sortConfig.key as keyof Event];
-
-        // Számok rendezése
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          return aVal - bVal;
-        }
-        // Boolean rendezés
-        if (typeof aVal === "boolean" && typeof bVal === "boolean") {
-          return aVal === bVal ? 0 : aVal ? 1 : -1;
-        }
-        // Egyébként stringként rendezünk (pl. esemény neve, dátum)
-        return (aVal as string).localeCompare(bVal as string);
+      sortable.sort((a, b) => {
+        const aVal = a[sortConfig.key as keyof typeof a];
+        const bVal = b[sortConfig.key as keyof typeof b];
+        return typeof aVal === "string" && typeof bVal === "string"
+          ? aVal.localeCompare(bVal)
+          : (aVal as number) - (bVal as number);
       });
-      if (sortConfig.direction === "desc") {
-        sortableItems.reverse();
-      }
+      if (sortConfig.direction === "desc") sortable.reverse();
     }
-    return sortableItems;
-  }, [data, sortConfig]);
+    return sortable;
+  }, [events, sortConfig]);
 
-  // Szerkesztés
-  const handleEdit = (event: Event) => {
-    setSelectedEvent({ ...event });
-    setShowEditModal(true);
-  };
-
-  const handleSaveEdit = () => {
-    if (selectedEvent) {
-      // Csak a bérlés mezőt módosítjuk (vagy további mezőket is, ha szeretnénk)
-      setData(
-        data.map((item) =>
-          item.id === selectedEvent.id ? { ...item, berles: selectedEvent.berles } : item
-        )
-      );
-      setShowEditModal(false);
-    }
-  };
-
-  // Törlés
-  const handleDelete = (event: Event) => {
-    setSelectedEvent({ ...event });
-    setShowDeleteModal(true);
-  };
-
-  const confirmDelete = () => {
-    if (selectedEvent) {
-      setData(data.filter((item) => item.id !== selectedEvent.id));
-      setShowDeleteModal(false);
+  const handleCancel = async () => {
+    if (!selectedEvent) return;
+    try {
+      await axios.delete(`${BASE_API_URL}/rents/${selectedEvent.id}`);
+      setEvents(events.filter(event => event.id !== selectedEvent.id));
       setSelectedEvent(null);
+      setSelectedEventDetails(null);
+      setShowDeleteModal(false);
+    } catch (error) {
+      console.error("Nem sikerült törölni a foglalást:", error);
     }
   };
 
-  // Új esemény hozzáadása
-  const handleAddEvent = () => {
-    setShowAddModal(true);
-  };
-
-  // Mentés az Új esemény modalban
-  // Csak rögzített eseményekből lehet választani
-  const saveNewEvent = () => {
-    if (newEventId > 0) {
-      // Megkeressük a kiválasztott eseményt
-      const chosen = valaszthatoEsemenyek.find((e) => e.id === newEventId);
-      if (chosen) {
-        // Létrehozunk egy új sort, egyedi ID-val
-        const newRow: Event = {
-          id: nextUniqueId,
-          esemény: chosen.esemény,
-          dátum: chosen.dátum,
-          berles: rentRequested,
-        };
-        setData([...data, newRow]);
-        setNextUniqueId(nextUniqueId + 1);
+  const handleOpenDeleteModal = async (event: any) => {
+    setSelectedEvent(event);
+    try {
+      const rentsRes = await axios.get(`${BASE_API_URL}/rents`);
+      const matchingRent = rentsRes.data.find((r: any) => r.id === event.id);
+      if (matchingRent && matchingRent.EventId) {
+        const eventRes = await axios.get(`${BASE_API_URL}/events/${matchingRent.EventId}`);
+        setSelectedEventDetails(eventRes.data);
+      } else {
+        setSelectedEventDetails(null);
       }
+    } catch (error) {
+      console.error("Nem sikerült lekérni az esemény adatait:", error);
+      setSelectedEventDetails(null);
     }
-    // Modal bezárása és mezők alaphelyzetbe állítása
-    setShowAddModal(false);
-    setNewEventId(0);
-    setRentRequested(false);
+    setShowDeleteModal(true);
   };
 
   return (
     <div className="d-flex vh-100">
-      {/* Oldalsó menü (Navbar) */}
-      <div className="d-flex flex-column bg-dark text-white p-2 position-fixed top-0 start-0 h-100 align-items-center navbar-container">
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/dashboard")}>
-          <RiDashboard3Fill size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn active-nav-icon" onClick={() => navigate("/esemenyek")}>
-          <FaCalendarAlt size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/foglalas")}>
-          <FaCartPlus size={24} className="nav-icon" />
-        </button>
-        <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/profil")}>
-          <FaUserAlt size={24} className="nav-icon" />
-        </button>
-        <div className="mt-auto mb-3">
-          <button className="btn btn-dark nav-btn" onClick={() => navigate("/beallitasok")}>
-            <FaPencil size={24} className="nav-icon" />
-          </button>
+      <div className="d-flex flex-column bg-dark text-white p-2 position-fixed top-0 start-0 h-100 align-items-center justify-content-between navbar-container">
+        <div className="d-flex flex-column align-items-center">
+          <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/dashboard")}><RiDashboard3Fill size={24} className="nav-icon" /></button>
+          <button className="btn btn-dark mb-3 nav-btn active-nav-icon" onClick={() => navigate("/esemenyek")}><FaCalendarAlt size={24} className="nav-icon" /></button>
+          <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/foglalas")}><FaCartPlus size={24} className="nav-icon" /></button>
+          <button className="btn btn-dark mb-3 nav-btn" onClick={() => navigate("/profil")}><FaUserAlt size={24} className="nav-icon" /></button>
         </div>
-        <button onClick={handleLogout} className="btn nav-btn logout-btn mb-2">
-          <IoIosLogOut size={24} className="nav-icon logout-icon" />
-        </button>
+        <div className="d-flex flex-column align-items-center">
+          <div style={{ height: "40px", marginBottom: "12px" }}>
+            {userRole === 0  ? (
+              <button className="btn btn-dark nav-btn" onClick={() => navigate("/beallitasok")}><FaPencil size={24} className="nav-icon" /></button>
+            ) : (
+              <div style={{ width: "40px" }}></div>
+            )}
+          </div>
+          <button onClick={handleLogout} className="btn nav-btn logout-btn mb-2"><IoIosLogOut size={24} className="nav-icon logout-icon" /></button>
+        </div>
       </div>
 
-      {/* Fő tartalom */}
-      <div className="flex-grow-1 p-4 position-relative" style={{ marginLeft: "5%" }}>
-        <h2>Aktív események</h2>
-
-        {/* Új esemény hozzáadása gomb */}
+      <div className="flex-grow-1 p-4 position-relative d-flex flex-column" style={{ marginLeft: "5%" }}>
+        <h2>Aktív bérléseid</h2>
+            
         <button
           className="btn btn-primary rounded-circle position-absolute top-0 end-0 m-3"
           style={{ width: "50px", height: "50px" }}
-          onClick={handleAddEvent}
+          onClick={() => navigate("/foglalas")}
         >
           <FaPlus />
         </button>
 
-        <div className="table-responsive">
+        <div className="table-responsive flex-grow-1" style={{ overflowY: "auto", maxHeight: "calc(100vh - 200px)" }}>
           <table className="table table-striped">
             <thead className="sticky-top bg-white">
               <tr>
-                <th onClick={() => handleSort("id")} style={{ cursor: "pointer" }}>
-                  ID{" "}
-                  {sortConfig.key === "id" &&
-                    sortConfig.direction !== "default" &&
-                    (sortConfig.direction === "asc" ? "↑" : "↓")}
-                </th>
-                <th onClick={() => handleSort("esemény")} style={{ cursor: "pointer" }}>
-                  Esemény{" "}
-                  {sortConfig.key === "esemény" &&
-                    sortConfig.direction !== "default" &&
-                    (sortConfig.direction === "asc" ? "↑" : "↓")}
-                </th>
-                <th onClick={() => handleSort("dátum")} style={{ cursor: "pointer" }}>
-                  Dátum{" "}
-                  {sortConfig.key === "dátum" &&
-                    sortConfig.direction !== "default" &&
-                    (sortConfig.direction === "asc" ? "↑" : "↓")}
-                </th>
-                <th onClick={() => handleSort("berles")} style={{ cursor: "pointer" }}>
-                  Bérlés{" "}
-                  {sortConfig.key === "berles" &&
-                    sortConfig.direction !== "default" &&
-                    (sortConfig.direction === "asc" ? "↑" : "↓")}
-                </th>
-                <th>Műveletek</th>
+                <th onClick={() => handleSort("id")} style={{ cursor: "pointer" }}>ID</th>
+                <th onClick={() => handleSort("termek")} style={{ cursor: "pointer" }}>Termék</th>
+                <th onClick={() => handleSort("kezdes")} style={{ cursor: "pointer" }}>Kezdés</th>
+                <th onClick={() => handleSort("lejarat")} style={{ cursor: "pointer" }}>Lejárat</th>
+                <th>Művelet</th>
               </tr>
             </thead>
             <tbody>
-              {sortedData.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.id}</td>
-                  <td>{row.esemény}</td>
-                  <td>{row.dátum}</td>
-                  <td>
-                    {row.berles ? (
-                      <span className="badge bg-success">Kértél eszközt</span>
-                    ) : (
-                      <span className="badge bg-primary">Saját eszközt hozol</span>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-warning btn-sm me-2"
-                      onClick={() => handleEdit(row)}
-                    >
-                      <FaPencilAlt />
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(row)}
-                    >
-                      <FaTrash />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {Array.isArray(sortedEvents) && sortedEvents.length > 0 ? (
+                sortedEvents.map((event) => (
+                  <tr key={event.id}>
+                    <td>{event.id}</td>
+                    <td>{event.termek}</td>
+                    <td>{new Date(event.kezdes).toLocaleDateString()}</td>
+                    <td>{new Date(event.lejarat).toLocaleDateString()}</td>
+                    <td>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleOpenDeleteModal(event)}
+                      >
+                        Lemondás
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan={5} className="text-center">Nincs megjeleníthető bérlés</td></tr>
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Új esemény hozzáadása Modal */}
+        {errorMessage && <div className="login-alert error-alert mt-3">{errorMessage}</div>}
+
         <Modal show={showAddModal} onHide={() => setShowAddModal(false)}>
           <Modal.Header closeButton>
             <Modal.Title>Új esemény hozzáadása</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <Form>
-              {/* Lenyíló lista: csak a rögzített események közül lehet választani */}
-              <Form.Group className="mb-3">
-                <Form.Label>Válassz eseményt</Form.Label>
-                <Form.Select
-                  value={newEventId}
-                  onChange={(e) => setNewEventId(Number(e.target.value))}
-                >
-                  <option value={0}>Válassz egy eseményt...</option>
-                  {valaszthatoEsemenyek.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.esemény} - {e.dátum}
-                    </option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Check
-                  type="checkbox"
-                  label="Kérsz eszközt?"
-                  checked={rentRequested}
-                  onChange={(e) => setRentRequested(e.target.checked)}
-                />
-              </Form.Group>
-            </Form>
+            <p>Itt fog megjelenni az új esemény űrlap.</p>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
-              Mégse
-            </Button>
-            <Button variant="primary" onClick={saveNewEvent}>
-              Hozzáadás
-            </Button>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>Mégse</Button>
+            <Button variant="primary" onClick={() => setShowAddModal(false)}>Mentés</Button>
           </Modal.Footer>
         </Modal>
 
-        {/* Szerkesztés Modal */}
-        <Modal show={showEditModal} onHide={() => setShowEditModal(false)}>
+        <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
           <Modal.Header closeButton>
-            <Modal.Title>Bérlés módosítása</Modal.Title>
+            <Modal.Title>Foglalás lemondása</Modal.Title>
           </Modal.Header>
           <Modal.Body>
+            <p>Biztosan le szeretnéd mondani ezt a foglalást?</p>
             {selectedEvent && (
-              <Form>
-                <Form.Group className="mb-3">
-                  <Form.Label>Esemény neve</Form.Label>
-                  <Form.Control type="text" value={selectedEvent.esemény} disabled />
-                </Form.Group>
-                <Form.Group className="mb-3">
-                  <Form.Label>Dátum</Form.Label>
-                  <Form.Control type="text" value={selectedEvent.dátum} disabled />
-                </Form.Group>
-                <Form.Group className="mb-3">
-                  <Form.Check
-                    type="checkbox"
-                    label="Kérsz eszközt?"
-                    checked={selectedEvent.berles || false}
-                    onChange={(e) =>
-                      setSelectedEvent({ ...selectedEvent, berles: e.target.checked })
-                    }
-                  />
-                </Form.Group>
-              </Form>
+              <div>
+                <p><strong>Termék:</strong> {selectedEvent.termek}</p>
+                <p><strong>Kezdés:</strong> {new Date(selectedEvent.kezdes).toLocaleDateString()}</p>
+                <p><strong>Lejárat:</strong> {new Date(selectedEvent.lejarat).toLocaleDateString()}</p>
+              </div>
+            )}
+            {selectedEventDetails && (
+              <div className="mt-3">
+                <p><strong>Esemény neve:</strong> {selectedEventDetails.name}</p>
+                <p><strong>Esemény kezdete:</strong> {new Date(selectedEventDetails.startDate).toLocaleString()}</p>
+                <p><strong>Esemény vége:</strong> {new Date(selectedEventDetails.endDate).toLocaleString()}</p>
+                <p><strong>Helyek száma:</strong> {selectedEventDetails.availablePLaces}</p>
+              </div>
             )}
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowEditModal(false)}>
-              Mégse
-            </Button>
-            <Button variant="primary" onClick={handleSaveEdit}>
-              Mentés
-            </Button>
-          </Modal.Footer>
-        </Modal>
-
-        {/* Törlés Modal */}
-        <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
-          <Modal.Header closeButton>
-            <Modal.Title>Törlés megerősítése</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>Biztosan törölni szeretnéd ezt az eseményt?</Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-              Mégse
-            </Button>
-            <Button variant="danger" onClick={confirmDelete}>
-              Törlés
-            </Button>
+            <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>Mégse</Button>
+            <Button variant="danger" onClick={handleCancel}>Lemondás</Button>
           </Modal.Footer>
         </Modal>
       </div>

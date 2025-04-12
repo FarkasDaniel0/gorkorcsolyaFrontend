@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
+const BASE_API_URL = "http://localhost:3000";
+
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isButtonDisabled, setIsButtonDisabled] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -11,32 +13,33 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setIsButtonDisabled(!(username.trim() && password.trim()));
-  }, [username, password]);
+    setIsButtonDisabled(!(email.trim() && password.trim()));
+  }, [email, password]);
 
   useEffect(() => {
     if (errorMessage || successMessage) {
       const timer = setTimeout(() => {
         setErrorMessage("");
         setSuccessMessage("");
-      }, 2000);
+      }, 15000);
       return () => clearTimeout(timer);
     }
   }, [errorMessage, successMessage]);
 
   const handleLogin = async () => {
     try {
-      const response = await axios.post("http://localhost:3000/api/auth/login", {
-        email: username,
-        password: password
+      const response = await axios.post(`${BASE_API_URL}/api/auth/login`, {
+        email,
+        password,
       });
 
-      const userId = response.data?.id || response.data?.user?.id;
-      if (userId) {
-        localStorage.setItem("userId", userId);
+      const userId = response.data?.userId;
+      if (!userId) {
+        throw new Error("A válasz nem tartalmaz userId-t.");
       }
 
-      localStorage.setItem("user", username);
+      localStorage.setItem("userId", userId.toString());
+      localStorage.setItem("user", email);
       setErrorMessage("");
       setSuccessMessage("Sikeres bejelentkezés!");
 
@@ -66,13 +69,15 @@ export default function Login() {
       <div className="login-container">
         <div className="login-card">
           <h2 className="login-title">Üdv újra!</h2>
-          <p className="login-subtitle">Kérlek, add meg az adataidat a bejelentkezéshez!</p>
+          <p className="login-subtitle">
+            Kérlek, add meg az adataidat a bejelentkezéshez!
+          </p>
           <form onSubmit={handleSubmit}>
             <input
               type="text"
               placeholder="Email cím"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="login-input"
             />
             <input
@@ -92,7 +97,9 @@ export default function Login() {
           </form>
           <p className="login-footer">
             Még nincs felhasználód?{" "}
-            <a href="/SignUp" className="login-link">Regisztrálok</a>
+            <a href="/SignUp" className="login-link">
+              Regisztrálok
+            </a>
           </p>
         </div>
       </div>
