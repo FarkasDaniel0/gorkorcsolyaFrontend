@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { RiDashboard3Fill } from "react-icons/ri";
@@ -12,6 +12,7 @@ const BASE_API_URL = "http://localhost:3000";
 export default function Foglalas() {
   const navigate = useNavigate();
   const location = useLocation();
+
   const [userId, setUserId] = useState<string | null>(localStorage.getItem("userId"));
   const [userRole, setUserRole] = useState<string | number>("");
   const [events, setEvents] = useState<any[]>([]);
@@ -23,33 +24,66 @@ export default function Foglalas() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  useEffect(() => {
-    if (!userId) {
-      navigate("/");
-    }
-  }, [userId]);
+  const token = localStorage.getItem("token");
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.clear();
     setUserId(null);
     navigate("/");
-  };
+  }, [navigate]);
 
   useEffect(() => {
+    const reqInterceptor = axios.interceptors.request.use((config) => {
+      if (token) {
+        const isEventsGet = config.method?.toLowerCase() === "get" && config.url?.includes("/events");
+        if (!isEventsGet) {
+          config.headers?.set('Authorization', `Bearer ${token}`);
+        }
+      }
+      return config;
+    });
+
+    const resInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response && error.response.status === 401) {
+          handleLogout();
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.request.eject(reqInterceptor);
+      axios.interceptors.response.eject(resInterceptor);
+    };
+  }, [token, handleLogout]);
+
+  useEffect(() => {
+    if (!userId) navigate("/");
+  }, [userId, navigate]);
+
+  const fetchData = useCallback(async () => {
     if (!userId) return;
 
-    axios.get(`${BASE_API_URL}/events/?id=${userId}`)
-      .then((res) => setEvents(res.data))
-      .catch((err) => console.error("Nem sikerült betölteni az eseményeket:", err));
+    try {
+      const [eventsRes, userRes, skatesRes] = await Promise.all([
+        axios.get(`${BASE_API_URL}/events/?id=${userId}`),
+        axios.get(`${BASE_API_URL}/currentUser/${userId}`),
+        axios.get(`${BASE_API_URL}/availableSkates`),
+      ]);
 
-    axios.get(`${BASE_API_URL}/currentUser/${userId}`)
-      .then((res) => setUserRole(res.data?.role))
-      .catch((err) => console.error("Nem sikerült lekérni a felhasználó szerepkörét:", err));
-
-    axios.get(`${BASE_API_URL}/skates`)
-      .then((res) => setSkates(res.data))
-      .catch((err) => console.error("Nem sikerült betölteni a korcsolyákat:", err));
+      setEvents(eventsRes.data);
+      setUserRole(userRes.data?.role);
+      setSkates(skatesRes.data);
+    } catch {
+      /* swallow */
+    }
   }, [userId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData, location]);
 
   useEffect(() => {
     if (errorMessage || successMessage) {
@@ -71,39 +105,33 @@ export default function Foglalas() {
         UserId: parseInt(userId),
         EventId: selectedEvent.id,
         FeetSize: finalFeetSize,
-        SkateId: finalSkateId
+        SkateId: finalSkateId,
       });
+
       setShowBookingModal(false);
       setFeetSize("");
       setSkateId(0);
       setSelectedEvent(null);
       setSuccessMessage("Sikeres foglalás!");
+
+      // Újra lekérjük a friss adatokat
+      fetchData();
     } catch (error: any) {
       const backendMessage =
-        error.response?.data?.message ||
-        error.response?.data ||
-        "Hiba történt a foglalás során. Próbáld újra.";
+        error.response?.data?.message || error.response?.data || "Hiba történt a foglalás során. Próbáld újra.";
       setErrorMessage(backendMessage);
     }
   };
 
-  const handleSkateChange = (selectedId: number) => {
-    setSkateId(selectedId);
-    const selectedSkate = skates.find((s) => s.id === selectedId);
-    if (selectedSkate && selectedSkate.size) {
-      setFeetSize(String(selectedSkate.size));
-    }
+  const handleSkateChange = (id: number) => {
+    setSkateId(id);
+    const skate = skates.find((s) => s.id === id);
+    if (skate && skate.size) setFeetSize(String(skate.size));
   };
 
-  const formatGender = (gender: number) => {
-    if (gender === 1) return "Nő";
-    if (gender === 2) return "Férfi";
-    return "Egyéb";
-  };
+  const formatGender = (g: number) => (g === 1 ? "Nő" : g === 2 ? "Férfi" : "Egyéb");
 
-  const filteredSkates = feetSize
-    ? skates.filter((s) => String(s.size) === feetSize)
-    : skates;
+  const filteredSkates = feetSize ? skates.filter((s) => String(s.size) === feetSize) : skates;
 
   return (
     <div className="d-flex vh-100">

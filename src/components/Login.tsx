@@ -34,12 +34,14 @@ export default function Login() {
       });
 
       const userId = response.data?.userId;
-      if (!userId) {
-        throw new Error("A válasz nem tartalmaz userId-t.");
+      const token = response.data?.token;
+      if (!token) {
+        throw new Error("A válasz nem tartalmaz token-t.");
       }
 
-      localStorage.setItem("userId", userId.toString());
+      localStorage.setItem("token", token.toString());
       localStorage.setItem("user", email);
+      localStorage.setItem("userId", userId.toString());
       setErrorMessage("");
       setSuccessMessage("Sikeres bejelentkezés!");
 
